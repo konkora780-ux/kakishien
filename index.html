@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>てがき れんしゅう</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Klee+One:wght@400;600&family=Yuji+Syuku&family=Zen+Kurenaido&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1a2a3a;
+    --indigo:#2f4a7c;
+    --indigo-dark:#22386a;
+    --warn:#c0392b;
+    --paper:#ffffff;
+    --bg:#eef1f6;
+    --line:#cdd6e4;
+    --guide:#c4ccd8;
+    --shadow:0 2px 10px rgba(34,56,106,.12);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;}
+  body{
+    font-family:"Hiragino Maru Gothic ProN","ヒラギノ丸ゴ ProN W4",
+                "Hiragino Kaku Gothic ProN",sans-serif;
+    background:var(--bg);color:var(--ink);
+    display:flex;flex-direction:column;height:100%;
+    -webkit-user-select:none;user-select:none;
+    position:fixed;inset:0;overscroll-behavior:none;
+  }
+
+  .bar{
+    flex:0 0 auto;background:var(--paper);box-shadow:var(--shadow);
+    padding:10px 12px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;z-index:5;
+  }
+  .group{display:flex;align-items:center;gap:8px;}
+  .group + .group{padding-left:12px;border-left:1px solid var(--line);}
+  label.field{display:flex;align-items:center;gap:6px;font-size:15px;color:var(--indigo);font-weight:700;}
+  input[type=text]{
+    font:inherit;font-size:18px;padding:8px 12px;width:170px;
+    border:2px solid var(--line);border-radius:12px;background:#fafbfd;color:var(--ink);
+  }
+  input[type=text]:focus{outline:none;border-color:var(--indigo);}
+  select{
+    font:inherit;font-size:17px;font-weight:700;padding:9px 10px;
+    border:2px solid var(--line);border-radius:12px;background:#fafbfd;color:var(--ink);
+  }
+  select:focus{outline:none;border-color:var(--indigo);}
+  .counter{font-size:18px;font-weight:700;color:var(--indigo);min-width:58px;text-align:center;}
+
+  button{
+    font:inherit;font-weight:700;font-size:16px;cursor:pointer;
+    border:2px solid var(--line);background:#fafbfd;color:var(--ink);
+    padding:10px 14px;border-radius:12px;min-height:46px;line-height:1;
+    display:inline-flex;align-items:center;gap:6px;transition:transform .05s ease;
+  }
+  button:active{transform:scale(.96);}
+  button:disabled{opacity:.35;}
+  button.primary{background:var(--indigo);border-color:var(--indigo);color:#fff;}
+  button.primary:active{background:var(--indigo-dark);}
+  button.ghost.on{background:var(--indigo);border-color:var(--indigo);color:#fff;}
+  button.warn{background:var(--warn);border-color:var(--warn);color:#fff;}
+
+  .thick{display:flex;gap:6px;}
+  .thick button{padding:8px;width:52px;height:52px;justify-content:center;}
+  .thick button.on{border-color:var(--indigo);background:#eaf0fb;}
+  .dot{background:var(--ink);border-radius:50%;display:block;}
+
+  .stage{flex:1 1 auto;position:relative;padding:14px;min-height:0;}
+  .sheet{
+    position:absolute;inset:14px;background:var(--paper);
+    border-radius:16px;box-shadow:var(--shadow);overflow:hidden;
+  }
+  canvas{display:block;width:100%;height:100%;touch-action:none;}
+  .hint{
+    position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    color:#aab4c6;font-size:20px;font-weight:700;pointer-events:none;text-align:center;
+  }
+  .toast{
+    position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);
+    background:var(--indigo);color:#fff;font-weight:700;font-size:16px;
+    padding:12px 20px;border-radius:12px;box-shadow:var(--shadow);
+    opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:20;
+    max-width:90%;text-align:center;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  .overlay{
+    position:fixed;inset:0;background:rgba(20,30,45,.45);
+    display:none;align-items:center;justify-content:center;z-index:30;padding:20px;
+  }
+  .overlay.show{display:flex;}
+  .panel{
+    background:#fff;border-radius:18px;box-shadow:0 12px 40px rgba(20,30,45,.3);
+    width:100%;max-width:540px;max-height:86vh;overflow:auto;padding:22px;
+  }
+  .panel h2{margin:0 0 4px;font-size:20px;color:var(--indigo);}
+  .panel .note{margin:0 0 16px;font-size:13px;color:#8a96a8;font-weight:700;}
+  .panel .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px;}
+  .panel .row input[type=text]{flex:1;min-width:180px;}
+  .panel hr{border:none;border-top:1px solid var(--line);margin:16px 0;}
+  .slotlist{margin-bottom:14px;}
+  .slot{
+    display:flex;align-items:center;gap:8px;padding:10px 12px;
+    border:1px solid var(--line);border-radius:12px;margin-bottom:8px;
+  }
+  .slot .nm{flex:1;font-weight:700;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .slot .dt{font-size:12px;color:#8a96a8;font-weight:700;}
+  .slot button{padding:8px 12px;min-height:40px;font-size:15px;}
+
+  .modal-overlay{position:fixed;inset:0;background:rgba(20,30,50,.45);display:flex;align-items:center;justify-content:center;z-index:30;padding:16px;}
+  .modal-overlay[hidden]{display:none;}
+  .modal{background:#fff;border-radius:18px;box-shadow:0 10px 40px rgba(0,0,0,.25);width:min(520px,100%);max-height:88vh;overflow:auto;}
+  .modal-head{display:flex;justify-content:space-between;align-items:center;padding:16px 18px;border-bottom:1px solid var(--line);font-size:18px;font-weight:800;color:var(--indigo);}
+  .modal-head .x{min-height:auto;padding:4px 12px;border:none;background:transparent;font-size:26px;color:#8a94a6;}
+  .modal-sec{padding:16px 18px;border-bottom:1px solid var(--line);}
+  .modal-sec:last-child{border-bottom:none;}
+  .sec-title{font-size:14px;font-weight:700;color:#7a8698;margin-bottom:10px;}
+  .row-inline{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+  .row-inline input[type=text]{flex:1;min-width:160px;width:auto;}
+  .file-btn{display:inline-flex;align-items:center;gap:6px;font:inherit;font-weight:700;font-size:16px;cursor:pointer;border:2px solid var(--line);background:#fafbfd;color:var(--ink);padding:10px 14px;border-radius:12px;min-height:46px;}
+  .save-list{display:flex;flex-direction:column;gap:8px;}
+  .save-row{display:flex;gap:8px;}
+  .save-open{flex:1;justify-content:flex-start;text-align:left;}
+  .save-del{flex:0 0 auto;}
+  .empty{color:#9aa6b8;font-size:15px;padding:6px 0;}
+
+  @media print{
+    @page{margin:14mm;}
+    html,body{height:auto;overflow:visible;background:#fff;position:static;}
+    .bar,.hint,.toast{display:none !important;}
+    .stage{padding:0;}
+    .sheet{position:static;inset:auto;box-shadow:none;border-radius:0;width:100%;height:auto;}
+  }
+</style>
+</head>
+<body>
+
+  <div class="bar">
+    <div class="group">
+      <label class="field">おてほん
+        <input id="model" type="text" placeholder="例：あいうえお" autocomplete="off" spellcheck="false">
+      </label>
+      <button id="toggleGuide" class="ghost on" aria-pressed="true">おてほん 表示</button>
+      <label class="field">フォント
+        <select id="font">
+          <option value='"YuKyokasho","YuKyokasho Yoko","游教科書体","Yu Kyokasho","Klee One","UD Digi Kyokasho NP-R","UD デジタル教科書体 NP-R","教科書体","Hiragino Mincho ProN",serif'>教科書体（楷書）</option>
+          <option value='"Zen Kurenaido","Klee One",sans-serif'>手書き風</option>
+          <option value='"Yuji Syuku","Klee One",serif'>筆書き楷書</option>
+          <option value='"Hiragino Mincho ProN","ヒラギノ明朝 ProN",serif'>明朝体</option>
+          <option value='"Hiragino Kaku Gothic ProN","ヒラギノ角ゴ ProN",sans-serif'>ゴシック体</option>
+          <option value='"Hiragino Maru Gothic ProN","ヒラギノ丸ゴ ProN",sans-serif'>丸ゴシック</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="group">
+      <button id="prevCh">◀ まえ</button>
+      <span class="counter" id="counter">0 / 0</span>
+      <button id="nextCh">つぎ ▶</button>
+    </div>
+
+    <div class="group">
+      <span class="field" style="cursor:default;">ふとさ</span>
+      <div class="thick" id="thick">
+        <button data-w="6"  aria-label="ほそい"><span class="dot" style="width:6px;height:6px"></span></button>
+        <button data-w="12" class="on" aria-label="ふつう"><span class="dot" style="width:12px;height:12px"></span></button>
+        <button data-w="20" aria-label="ふとい"><span class="dot" style="width:20px;height:20px"></span></button>
+        <button data-w="34" aria-label="ごくぶと"><span class="dot" style="width:28px;height:28px"></span></button>
+        <button data-w="48" aria-label="とくぶと"><span class="dot" style="width:31px;height:31px"></span></button>
+        <button data-w="64" aria-label="ちょうごくぶと"><span class="dot" style="width:34px;height:34px"></span></button>
+      </div>
+    </div>
+
+    <div class="group">
+      <button id="undo">↩ ひとつ もどす</button>
+      <button id="clear">この字 けす</button>
+      <button id="reset">🔄 さいしょから</button>
+    </div>
+
+    <div class="group">
+      <button id="view" class="ghost">📄 文章を みる</button>
+      <button id="relayout" disabled>⤢ ならべ直す</button>
+    </div>
+
+    <div class="group">
+      <button id="saveImg">🖼 画像で ほぞん</button>
+      <button id="copyImg">📋 画像を コピー</button>
+      <button id="print" class="primary">🖨 いんさつ</button>
+    </div>
+
+    <div class="group">
+      <button id="store">💾 ほぞん・よみこみ</button>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="sheet">
+      <canvas id="cv"></canvas>
+      <div class="hint" id="hint">ここに ゆびや Apple Pencil で かいてね</div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <div class="overlay" id="overlay">
+    <div class="panel">
+      <h2>ほぞん・よみこみ</h2>
+      <p class="note">じどう保存は ON です（この ブラウザに のこります）。ほかの 端末で つかうときは ファイルに かきだしてください。</p>
+      <div class="row">
+        <input type="text" id="slotName" placeholder="なまえ（れい：ひらがな れんしゅう）" autocomplete="off">
+        <button id="doSaveSlot" class="primary">なまえを つけて 保存</button>
+      </div>
+      <div class="slotlist" id="slotList"></div>
+      <hr>
+      <div class="row">
+        <button id="doExport">⬇ ファイルに かきだし</button>
+        <button id="doImport">⬆ ファイルから よみこみ</button>
+      </div>
+      <div class="row" style="margin-bottom:0;justify-content:flex-end;">
+        <button id="closePanel">とじる</button>
+      </div>
+    </div>
+  </div>
+  <input type="file" id="fileInput" accept="application/json,.json" style="display:none">
+
+<script>
+(() => {
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const hint = document.getElementById('hint');
+  const modelInput = document.getElementById('model');
+
+  let dpr = 1, W = 0, H = 0;
+  let strokesByChar = [];        // 文字ごとの手書き。strokesByChar[i] = その文字の線の配列
+  let cur = null;                // 描いている途中の線
+  let penW = 12;
+  let showGuide = true;
+  let guideText = '';
+  let guideFont = '';
+  let charIndex = 0;             // いま練習している文字の位置
+  let mode = 'practice';         // 'practice'（書く） / 'sentence'（文章をみる）
+  let layout = null;             // 文章をみるモードの各文字の配置（正規化座標 0〜1）
+  let layoutMW = 0, layoutMH = 0;// マスの大きさ（正規化）
+  let dragIndex = -1, drag = null; // ドラッグ中の文字
+  let printing = false;          // 印刷中フラグ（枠を隠す）
+
+  const INK = getComputedStyle(document.documentElement).getPropertyValue('--ink').trim() || '#1a2a3a';
+  const GUIDE = getComputedStyle(document.documentElement).getPropertyValue('--guide').trim() || '#c4ccd8';
+  const INDIGO = getComputedStyle(document.documentElement).getPropertyValue('--indigo').trim() || '#2f4a7c';
+
+  function clamp(v,a,b){ return Math.min(Math.max(v,a),b); }
+
+  // いまの文字の手書き配列を返す（無ければ作る）
+  function curStrokes(){
+    if(!strokesByChar[charIndex]) strokesByChar[charIndex] = [];
+    return strokesByChar[charIndex];
+  }
+
+  function resize(){
+    const r = cv.getBoundingClientRect();
+    W = r.width; H = r.height;
+    dpr = window.devicePixelRatio || 1;
+    cv.width = Math.round(W * dpr);
+    cv.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    redraw();
+  }
+
+  // お手本（今の1文字）を薄く描く
+  function drawGuide(){
+    if(!showGuide || !guideText) return;
+    const ch = guideText[charIndex];
+    if(!ch) return;
+    ctx.save();
+    ctx.fillStyle = GUIDE;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const family = guideFont;
+    let size = H * 0.82;
+    ctx.font = `${size}px ${family}`;
+    const maxW = W * 0.92;
+    const tw = ctx.measureText(ch).width;
+    if(tw > maxW){ size *= maxW / tw; ctx.font = `${size}px ${family}`; }
+    ctx.fillText(ch, W/2, H/2);
+    ctx.restore();
+  }
+
+  // 1本の線を、指定の枠(ox,oy,幅sw,高さsh)の中に描く。lwScaleで太さも縮尺。
+  function paintStroke(s, ox, oy, sw, sh, lwScale){
+    const pts = s.pts;
+    if(!pts.length) return;
+    ctx.save();
+    ctx.strokeStyle = INK; ctx.fillStyle = INK;
+    ctx.lineWidth = s.w * lwScale;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    if(pts.length === 1){
+      ctx.beginPath();
+      ctx.arc(ox+pts[0].x*sw, oy+pts[0].y*sh, (s.w*lwScale)/2, 0, Math.PI*2);
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(ox+pts[0].x*sw, oy+pts[0].y*sh);
+      for(let i=1;i<pts.length;i++) ctx.lineTo(ox+pts[i].x*sw, oy+pts[i].y*sh);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // 自動配置を計算して layout（各文字の左上座標・正規化）を作る
+  function buildLayout(){
+    const n = guideText.length;
+    layout = [];
+    if(!n) return;
+    const availW = W*0.94, availH = H*0.94;
+    let best = null;
+    for(let cols=1; cols<=n; cols++){
+      const rows = Math.ceil(n/cols);
+      let mw = availW/cols, mh = mw;            // 正方形マス
+      if(mh*rows > availH){ mh = availH/rows; mw = mh; }
+      const area = mw*mh;
+      if(!best || area > best.area) best = {cols,rows,mw,mh,area};
+    }
+    const {cols,rows,mw,mh} = best;
+    const offX = (W - mw*cols)/2, offY = (H - mh*rows)/2;
+    layoutMW = mw/W; layoutMH = mh/H;
+    for(let i=0;i<n;i++){
+      const cx = i%cols, cy = Math.floor(i/cols);
+      layout.push({ x:(offX+cx*mw)/W, y:(offY+cy*mh)/H });
+    }
+  }
+  // layout が未作成 or 文字数と合わなければ作り直す（手動配置はできるだけ保持）
+  function ensureLayout(){
+    if(!layout || layout.length !== guideText.length) buildLayout();
+  }
+
+  // 「文章をみる」：各文字を配置どおりに描く。ドラッグ中の文字は枠を強調。
+  function drawSentence(){
+    if(!guideText) return;
+    ensureLayout();
+    const mw = layoutMW*W, mh = layoutMH*H;
+    const sh = mw * (H/W);        // 手書きは書いたときの縦横比を保つ
+    const oy = (mh - sh)/2;       // 正方形マスの中で縦中央に置く
+    for(let i=0;i<layout.length;i++){
+      const bx = layout[i].x*W, by = layout[i].y*H;
+      if(!printing){                      // 印刷時はマス枠を隠す
+        const sel = (i === dragIndex);
+        ctx.save();
+        ctx.strokeStyle = sel ? INDIGO : '#e6eaf2';
+        ctx.lineWidth = sel ? 2 : 1;
+        ctx.strokeRect(bx+0.5, by+0.5, mw-1, mh-1);
+        ctx.restore();
+      }
+      const ss = strokesByChar[i] || [];
+      for(const s of ss) paintStroke(s, bx, by+oy, mw, sh, mw/W);
+    }
+  }
+
+  function updateHint(){
+    const empty = mode==='practice' && !guideText && curStrokes().length===0 && !cur;
+    hint.style.display = empty ? 'block' : 'none';
+  }
+
+  function redraw(){
+    ctx.clearRect(0,0,W,H);
+    if(mode === 'sentence'){
+      drawSentence();
+    } else {
+      drawGuide();
+      for(const s of curStrokes()) paintStroke(s,0,0,W,H,1);
+      if(cur) paintStroke(cur,0,0,W,H,1);
+    }
+    updateHint();
+  }
+
+  function pos(e){
+    const r = cv.getBoundingClientRect();
+    return { x:(e.clientX - r.left)/r.width, y:(e.clientY - r.top)/r.height };
+  }
+
+  function start(e){
+    if(mode === 'sentence'){ dragStart(e); return; }  // 文章をみる中は文字を動かす
+    e.preventDefault();
+    cv.setPointerCapture(e.pointerId);
+    cur = { w:penW, pts:[pos(e)] };
+    hint.style.display = 'none';
+    paintStroke(cur,0,0,W,H,1);
+  }
+  function move(e){
+    if(mode === 'sentence'){ dragMove(e); return; }
+    if(!cur) return;
+    e.preventDefault();
+    const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+    for(const ev of evs) cur.pts.push(pos(ev));
+    redraw();
+  }
+  function end(e){
+    if(mode === 'sentence'){ dragEnd(e); return; }
+    if(!cur) return;
+    e.preventDefault();
+    curStrokes().push(cur);   // 一画として確定
+    cur = null;
+    redraw();
+    scheduleAutoSave();
+  }
+
+  // --- 文章をみるモードでのドラッグ移動 ---
+  function dragStart(e){
+    if(!guideText) return;
+    ensureLayout();
+    const p = pos(e);
+    for(let i=layout.length-1; i>=0; i--){   // 前面（後から描いたもの）を優先して掴む
+      const L = layout[i];
+      if(p.x>=L.x && p.x<=L.x+layoutMW && p.y>=L.y && p.y<=L.y+layoutMH){
+        drag = { index:i, dx:p.x-L.x, dy:p.y-L.y };
+        dragIndex = i;
+        cv.setPointerCapture(e.pointerId);
+        e.preventDefault();
+        redraw();
+        return;
+      }
+    }
+  }
+  function dragMove(e){
+    if(!drag) return;
+    e.preventDefault();
+    const p = pos(e);
+    const L = layout[drag.index];
+    L.x = clamp(p.x - drag.dx, 0, 1 - layoutMW);
+    L.y = clamp(p.y - drag.dy, 0, 1 - layoutMH);
+    redraw();
+  }
+  function dragEnd(e){
+    if(!drag) return;
+    e.preventDefault();
+    drag = null;
+    redraw();
+    scheduleAutoSave();
+  }
+
+  cv.addEventListener('pointerdown', start);
+  cv.addEventListener('pointermove', move);
+  cv.addEventListener('pointerup', end);
+  cv.addEventListener('pointercancel', end);
+  ['touchstart','touchmove','touchend'].forEach(t =>
+    cv.addEventListener(t, e => e.preventDefault(), {passive:false})
+  );
+
+  // 一画もどす
+  document.getElementById('undo').onclick = () => {
+    if(mode !== 'practice') return;
+    curStrokes().pop(); redraw(); scheduleAutoSave();
+  };
+
+  // この字を消す（もう1回押すと消える＝確認ダイアログに頼らない）
+  const clearBtn = document.getElementById('clear');
+  let armed = false, armTimer = null;
+  function disarm(){ armed=false; clearTimeout(armTimer); clearBtn.textContent='この字 けす'; clearBtn.classList.remove('warn'); }
+  clearBtn.onclick = () => {
+    if(mode !== 'practice') return;
+    if(curStrokes().length===0 && !cur){ disarm(); return; }
+    if(!armed){
+      armed = true; clearBtn.textContent = 'もう1かいで けす'; clearBtn.classList.add('warn');
+      armTimer = setTimeout(disarm, 2500);
+      return;
+    }
+    disarm();
+    strokesByChar[charIndex] = []; cur = null; redraw(); scheduleAutoSave();
+  };
+
+  // さいしょから（文章も手書きも全部まっさらに。設定〔フォント・太さ〕は残す）
+  const resetBtn = document.getElementById('reset');
+  let resetArmed = false, resetTimer = null;
+  function resetDisarm(){ resetArmed=false; clearTimeout(resetTimer); resetBtn.textContent='🔄 さいしょから'; resetBtn.classList.remove('warn'); }
+  resetBtn.onclick = () => {
+    if(!resetArmed){
+      resetArmed = true; resetBtn.textContent = 'もう1かいで リセット'; resetBtn.classList.add('warn');
+      resetTimer = setTimeout(resetDisarm, 2500);
+      return;
+    }
+    resetDisarm(); disarm();
+    guideText = ''; modelInput.value = '';
+    strokesByChar = []; charIndex = 0; cur = null; layout = null; dragIndex = -1;
+    setMode('practice');
+    updateCounter();
+    redraw();
+    scheduleAutoSave();
+    flash('さいしょから はじめられます');
+  };
+
+  // お手本 表示／非表示
+  const tg = document.getElementById('toggleGuide');
+  tg.onclick = () => {
+    showGuide = !showGuide;
+    tg.classList.toggle('on', showGuide);
+    tg.setAttribute('aria-pressed', showGuide);
+    tg.textContent = showGuide ? 'おてほん 表示' : 'おてほん 非表示';
+    redraw();
+  };
+
+  // 文章入力（変えると手書きはリセット：文字の対応が変わるため）
+  function updateCounter(){
+    document.getElementById('counter').textContent = guideText ? `${charIndex+1} / ${guideText.length}` : '0 / 0';
+  }
+  modelInput.addEventListener('input', e => {
+    guideText = e.target.value;
+    strokesByChar = []; charIndex = 0; cur = null;
+    layout = null; dragIndex = -1;   // 配置もリセット
+    disarm();
+    setMode('practice');   // 内部でredraw
+    updateCounter();
+    redraw();
+    scheduleAutoSave();
+  });
+
+  // フォント選択
+  const fontSel = document.getElementById('font');
+  guideFont = fontSel.value;
+  fontSel.addEventListener('change', e => { guideFont = e.target.value; redraw(); scheduleAutoSave(); });
+
+  // 文字送り（手書きは消さずに行き来。前の字に戻ると、その字の手書きが復元される）
+  function go(d){
+    if(!guideText) return;
+    if(mode !== 'practice') setMode('practice');
+    const ni = Math.min(Math.max(charIndex + d, 0), guideText.length - 1);
+    if(ni === charIndex){ updateCounter(); return; }
+    charIndex = ni; cur = null; disarm();
+    updateCounter(); redraw(); scheduleAutoSave();
+  }
+  document.getElementById('prevCh').onclick = () => go(-1);
+  document.getElementById('nextCh').onclick = () => go(1);
+
+  // 太さ
+  document.querySelectorAll('#thick button').forEach(b => {
+    b.onclick = () => { setPenUI(Number(b.dataset.w)); scheduleAutoSave(); };
+  });
+
+  // モード切替（書く ⇔ 文章をみる）
+  const viewBtn = document.getElementById('view');
+  function setMode(m){
+    mode = m;
+    if(mode === 'sentence') ensureLayout();   // 配置を用意
+    dragIndex = -1; drag = null;
+    viewBtn.textContent = mode==='sentence' ? '✏ 書くに もどる' : '📄 文章を みる';
+    viewBtn.classList.toggle('on', mode==='sentence');
+    // 書く専用のボタンは「文章をみる」中は無効化
+    const lock = mode==='sentence';
+    ['prevCh','nextCh','undo','clear','toggleGuide'].forEach(id=>{
+      document.getElementById(id).disabled = lock;
+    });
+    document.querySelectorAll('#thick button').forEach(b=>b.disabled=lock);
+    document.getElementById('relayout').disabled = !lock;  // 並べ直しは文章をみる中だけ
+    disarm();
+    redraw();
+  }
+  viewBtn.onclick = () => setMode(mode==='sentence' ? 'practice' : 'sentence');
+
+  // 自動配置に戻す
+  document.getElementById('relayout').onclick = () => {
+    if(mode !== 'sentence') return;
+    buildLayout(); dragIndex = -1; redraw(); scheduleAutoSave();
+  };
+
+  // --- 画像の書き出し（Wordなどに貼る用） ---
+  let toastTimer = null;
+  function flash(msg){
+    const t = document.getElementById('toast');
+    t.textContent = msg; t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2800);
+  }
+  // お手本・枠を外し、白い背景に書いた文字だけを描いたキャンバスを作る
+  function makeExportCanvas(){
+    const pg = showGuide, pp = printing, pd = dragIndex;
+    showGuide = false; printing = true; dragIndex = -1;
+    redraw();
+    const out = document.createElement('canvas');
+    const octx = out.getContext('2d');
+    if(mode === 'sentence' && guideText && layout && layout.length){
+      // 文章：並べた文字の外接範囲だけを切り出す（1文字なら正方形）
+      let minX=1, minY=1, maxX=0, maxY=0;
+      for(const L of layout){
+        minX = Math.min(minX, L.x); minY = Math.min(minY, L.y);
+        maxX = Math.max(maxX, L.x+layoutMW); maxY = Math.max(maxY, L.y+layoutMH);
+      }
+      const pad = 0.02;
+      minX = Math.max(0,minX-pad); minY = Math.max(0,minY-pad);
+      maxX = Math.min(1,maxX+pad); maxY = Math.min(1,maxY+pad);
+      const sx = minX*cv.width, sy = minY*cv.height;
+      const sw = (maxX-minX)*cv.width, sh = (maxY-minY)*cv.height;
+      out.width = Math.round(sw); out.height = Math.round(sh);
+      octx.fillStyle = '#ffffff'; octx.fillRect(0,0,out.width,out.height);
+      octx.drawImage(cv, sx,sy,sw,sh, 0,0,out.width,out.height);
+    } else {
+      // 書く：お手本は中央なので、中央の正方形を切り出す
+      const side = Math.min(cv.width, cv.height);
+      const sx = (cv.width-side)/2, sy = (cv.height-side)/2;
+      out.width = side; out.height = side;
+      octx.fillStyle = '#ffffff'; octx.fillRect(0,0,side,side);
+      octx.drawImage(cv, sx,sy,side,side, 0,0,side,side);
+    }
+    showGuide = pg; printing = pp; dragIndex = pd;
+    redraw();
+    return out;
+  }
+  function stamp(){
+    const d = new Date(), p = n => String(n).padStart(2,'0');
+    return `${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
+  }
+  document.getElementById('saveImg').onclick = () => {
+    makeExportCanvas().toBlob(blob => {
+      if(!blob){ flash('画像を つくれませんでした'); return; }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `tegaki-${stamp()}.png`;
+      document.body.appendChild(a); a.click();
+      setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+      flash('画像を ほぞんしました');
+    }, 'image/png');
+  };
+  document.getElementById('copyImg').onclick = async () => {
+    try{
+      if(!navigator.clipboard || !window.ClipboardItem) throw new Error('未対応');
+      const blob = await new Promise(res => makeExportCanvas().toBlob(res, 'image/png'));
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      flash('画像を コピーしました。ワードなどに はりつけ できます');
+    }catch(err){
+      flash('コピーできませんでした。「画像で ほぞん」を つかってください');
+    }
+  };
+
+  // 印刷：お手本は外す。今のモードのまま印刷（書く＝今の字／文章をみる＝文章全体）
+  document.getElementById('print').onclick = () => window.print();
+
+  // ====== 書いた内容の保存・よみこみ ======
+  function setPenUI(w){
+    penW = w;
+    document.querySelectorAll('#thick button').forEach(x=>{
+      x.classList.toggle('on', Number(x.dataset.w)===w);
+    });
+  }
+  // いまの状態をまとめる／復元する
+  function getState(){
+    return { v:1, text:guideText, font:guideFont, penW:penW,
+             strokes:strokesByChar, layout:layout, layoutMW:layoutMW, layoutMH:layoutMH };
+  }
+  function applyState(s){
+    if(!s) return;
+    guideText = s.text || '';
+    modelInput.value = guideText;
+    if(s.font){ fontSel.value = s.font; guideFont = fontSel.value; }
+    strokesByChar = Array.isArray(s.strokes) ? s.strokes : [];
+    layout = s.layout || null;
+    layoutMW = s.layoutMW || 0;
+    layoutMH = s.layoutMH || 0;
+    if(s.penW) setPenUI(s.penW);
+    charIndex = 0; cur = null; dragIndex = -1;
+    disarm();
+    setMode('practice');
+    updateCounter();
+    redraw();
+  }
+
+  // localStorage（使えない環境ではそっと無効化）
+  function lsGet(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+  function lsSet(k,v){ try{ localStorage.setItem(k,v); return true; }catch(e){ return false; } }
+  const LS_AUTO='tegaki_auto', LS_SLOTS='tegaki_slots';
+
+  // 自動保存（書くたびに少し待ってから保存）
+  let autoTimer=null;
+  function scheduleAutoSave(){
+    clearTimeout(autoTimer);
+    autoTimer=setTimeout(()=>lsSet(LS_AUTO, JSON.stringify(getState())), 600);
+  }
+  function loadAuto(){
+    const raw=lsGet(LS_AUTO); if(!raw) return;
+    try{ applyState(JSON.parse(raw)); }catch(e){}
+  }
+
+  // 名前つき保存（複数）
+  function getSlots(){ const raw=lsGet(LS_SLOTS); if(!raw) return {}; try{ return JSON.parse(raw)||{}; }catch(e){ return {}; } }
+  function setSlots(o){ lsSet(LS_SLOTS, JSON.stringify(o)); }
+  function renderSlots(){
+    const slots=getSlots();
+    const ids=Object.keys(slots).sort((a,b)=>slots[b].savedAt-slots[a].savedAt);
+    const list=document.getElementById('slotList');
+    list.innerHTML='';
+    if(ids.length===0){ list.innerHTML='<p class="note">保存した ものは まだ ありません</p>'; return; }
+    for(const id of ids){
+      const s=slots[id];
+      const div=document.createElement('div'); div.className='slot';
+      const nm=document.createElement('span'); nm.className='nm'; nm.textContent=s.name;
+      const dt=document.createElement('span'); dt.className='dt';
+      dt.textContent=new Date(s.savedAt).toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+      const open=document.createElement('button'); open.textContent='ひらく';
+      open.onclick=()=>{ applyState(s.state); scheduleAutoSave(); closeOverlay(); flash('よみこみました'); };
+      const del=document.createElement('button'); del.textContent='けす';
+      del.onclick=()=>{
+        if(del.dataset.armed){ const o=getSlots(); delete o[id]; setSlots(o); renderSlots(); }
+        else { del.dataset.armed='1'; del.textContent='もう1かいで けす'; del.classList.add('warn');
+               setTimeout(()=>{ del.dataset.armed=''; del.textContent='けす'; del.classList.remove('warn'); },2500); }
+      };
+      div.appendChild(nm); div.appendChild(dt); div.appendChild(open); div.appendChild(del);
+      list.appendChild(div);
+    }
+  }
+
+  // パネルの開閉
+  const overlay=document.getElementById('overlay');
+  function openOverlay(){ renderSlots(); overlay.classList.add('show'); }
+  function closeOverlay(){ overlay.classList.remove('show'); }
+  document.getElementById('store').onclick = openOverlay;
+  document.getElementById('closePanel').onclick = closeOverlay;
+  overlay.addEventListener('click', e=>{ if(e.target===overlay) closeOverlay(); });
+
+  document.getElementById('doSaveSlot').onclick = () => {
+    const inp=document.getElementById('slotName');
+    const nm=inp.value.trim() || ('むめい '+new Date().toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}));
+    const slots=getSlots();
+    slots['s'+Date.now()]={ name:nm, savedAt:Date.now(), state:getState() };
+    setSlots(slots); inp.value=''; renderSlots(); flash('「'+nm+'」を 保存しました');
+  };
+
+  // ファイルに書き出し／読み込み
+  document.getElementById('doExport').onclick = () => {
+    const blob=new Blob([JSON.stringify(getState())], {type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download='tegaki-'+stamp()+'.json';
+    document.body.appendChild(a); a.click();
+    setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); },1000);
+    flash('ファイルに かきだしました');
+  };
+  const fileInput=document.getElementById('fileInput');
+  document.getElementById('doImport').onclick = () => fileInput.click();
+  fileInput.onchange = e => {
+    const f=e.target.files[0]; if(!f) return;
+    const reader=new FileReader();
+    reader.onload=()=>{
+      try{ applyState(JSON.parse(reader.result)); scheduleAutoSave(); closeOverlay(); flash('ファイルを よみこみました'); }
+      catch(err){ flash('よみこめませんでした'); }
+    };
+    reader.readAsText(f); e.target.value='';
+  };
+  window.addEventListener('beforeprint', () => {
+    const sheet = document.querySelector('.sheet');
+    sheet.style.height = (W * (H/W)) + 'px';
+    sheet.dataset.g = showGuide ? '1':'0';
+    showGuide = false; printing = true; dragIndex = -1;
+    redraw();
+  });
+  window.addEventListener('afterprint', () => {
+    const sheet = document.querySelector('.sheet');
+    sheet.style.height = '';
+    showGuide = sheet.dataset.g === '1';
+    printing = false;
+    tg.classList.toggle('on', showGuide);
+    tg.textContent = showGuide ? 'おてほん 表示' : 'おてほん 非表示';
+    resize();
+  });
+
+  window.addEventListener('resize', resize);
+  // 向きを変えたら配置は作り直します（縦横比が変わるため）
+  window.addEventListener('orientationchange', () => setTimeout(() => { layout = null; resize(); }, 200));
+  updateCounter();
+  resize();
+  loadAuto();   // 前回の続きがあれば復元
+
+  // 教科書体（Klee One）の読み込みが終わったら描き直す（Canvasに字形を反映するため）
+  if(document.fonts && document.fonts.load){
+    Promise.all([
+      document.fonts.load('400 40px "Klee One"'),
+      document.fonts.load('600 40px "Klee One"'),
+      document.fonts.load('40px "Zen Kurenaido"'),
+      document.fonts.load('40px "Yuji Syuku"')
+    ]).then(redraw).catch(()=>{});
+  }
+})();
+</script>
+</body>
+</html>
