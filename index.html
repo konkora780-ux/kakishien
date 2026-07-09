@@ -108,6 +108,13 @@
   .slot .nm{flex:1;font-weight:700;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .slot .dt{font-size:12px;color:#8a96a8;font-weight:700;}
   .slot button{padding:8px 12px;min-height:40px;font-size:15px;}
+  .panel textarea{
+    width:100%;font-size:22px;line-height:1.7;padding:14px;
+    border:2px solid var(--line);border-radius:12px;background:#fafbfd;color:var(--ink);
+    resize:vertical;min-height:180px;margin-bottom:14px;
+    font-family:"Hiragino Maru Gothic ProN","Hiragino Kaku Gothic ProN",sans-serif;
+  }
+  .panel textarea:focus{outline:none;border-color:var(--indigo);}
 
   .modal-overlay{position:fixed;inset:0;background:rgba(20,30,50,.45);display:flex;align-items:center;justify-content:center;z-index:30;padding:16px;}
   .modal-overlay[hidden]{display:none;}
@@ -139,9 +146,7 @@
 
   <div class="bar">
     <div class="group">
-      <label class="field">おてほん
-        <input id="model" type="text" placeholder="例：あいうえお" autocomplete="off" spellcheck="false">
-      </label>
+      <button id="openModel">✏ お手本を 入力</button>
       <button id="toggleGuide" class="ghost on" aria-pressed="true">おてほん 表示</button>
       <label class="field">フォント
         <select id="font">
@@ -223,6 +228,17 @@
       </div>
     </div>
   </div>
+  <div class="overlay" id="modelOverlay">
+    <div class="panel">
+      <h2>お手本を 入力</h2>
+      <p class="note">文しょうを 入力してください。改行や スペースで 見やすく できます（練習では 文字だけ 出ます）。</p>
+      <textarea id="model" rows="6" placeholder="れい：あいうえお&#10;かきくけこ" autocomplete="off" spellcheck="false"></textarea>
+      <div class="row" style="justify-content:space-between;margin-bottom:0;">
+        <button id="modelClear">くうはくに する</button>
+        <button id="modelApply" class="primary">これで 練習</button>
+      </div>
+    </div>
+  </div>
   <input type="file" id="fileInput" accept="application/json,.json" style="display:none">
 
 <script>
@@ -237,7 +253,8 @@
   let cur = null;                // 描いている途中の線
   let penW = 12;
   let showGuide = true;
-  let guideText = '';
+  let guideText = '';           // 練習用（改行・スペースを除いた文字）
+  let guideRaw = '';            // 入力そのまま（改行・スペース入り。保存・再表示用）
   let guideFont = '';
   let charIndex = 0;             // いま練習している文字の位置
   let mode = 'practice';         // 'practice'（書く） / 'sentence'（文章をみる）
@@ -251,6 +268,10 @@
   const INDIGO = getComputedStyle(document.documentElement).getPropertyValue('--indigo').trim() || '#2f4a7c';
 
   function clamp(v,a,b){ return Math.min(Math.max(v,a),b); }
+  // 練習に使う文字だけ取り出す（改行・スペースは除く）
+  function filterChars(raw){
+    return Array.from(raw).filter(c => c!=='\n' && c!=='\r' && c!==' ' && c!=='　').join('');
+  }
 
   // いまの文字の手書き配列を返す（無ければ作る）
   function curStrokes(){
@@ -480,7 +501,7 @@
       return;
     }
     resetDisarm(); disarm();
-    guideText = ''; modelInput.value = '';
+    guideText = ''; guideRaw = ''; modelInput.value = '';
     strokesByChar = []; charIndex = 0; cur = null; layout = null; dragIndex = -1;
     setMode('practice');
     updateCounter();
@@ -503,16 +524,25 @@
   function updateCounter(){
     document.getElementById('counter').textContent = guideText ? `${charIndex+1} / ${guideText.length}` : '0 / 0';
   }
-  modelInput.addEventListener('input', e => {
-    guideText = e.target.value;
+  function applyModelText(){
+    guideRaw = modelInput.value;
+    guideText = filterChars(guideRaw);   // 練習用は文字だけ
     strokesByChar = []; charIndex = 0; cur = null;
-    layout = null; dragIndex = -1;   // 配置もリセット
+    layout = null; dragIndex = -1;
     disarm();
-    setMode('practice');   // 内部でredraw
+    setMode('practice');
     updateCounter();
     redraw();
     scheduleAutoSave();
-  });
+  }
+  modelInput.addEventListener('input', applyModelText);
+
+  // お手本を広い画面で入力
+  const modelOverlay = document.getElementById('modelOverlay');
+  document.getElementById('openModel').onclick = () => { modelOverlay.classList.add('show'); setTimeout(()=>modelInput.focus(), 50); };
+  document.getElementById('modelApply').onclick = () => modelOverlay.classList.remove('show');
+  modelOverlay.addEventListener('click', e => { if(e.target===modelOverlay) modelOverlay.classList.remove('show'); });
+  document.getElementById('modelClear').onclick = () => { modelInput.value=''; applyModelText(); };
 
   // フォント選択
   const fontSel = document.getElementById('font');
@@ -642,13 +672,14 @@
   }
   // いまの状態をまとめる／復元する
   function getState(){
-    return { v:1, text:guideText, font:guideFont, penW:penW,
+    return { v:1, text:guideRaw, font:guideFont, penW:penW,
              strokes:strokesByChar, layout:layout, layoutMW:layoutMW, layoutMH:layoutMH };
   }
   function applyState(s){
     if(!s) return;
-    guideText = s.text || '';
-    modelInput.value = guideText;
+    guideRaw = s.text || '';
+    modelInput.value = guideRaw;
+    guideText = filterChars(guideRaw);
     if(s.font){ fontSel.value = s.font; guideFont = fontSel.value; }
     strokesByChar = Array.isArray(s.strokes) ? s.strokes : [];
     layout = s.layout || null;
