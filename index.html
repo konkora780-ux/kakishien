@@ -886,9 +886,11 @@
     resize();
   });
 
-  window.addEventListener('resize', resize);
+  // 回転や画面変化のあと、サイズを取り直す（iPadは直後だと寸法が古いことがあるため二段構え）
+  function safeResize(){ resize(); setTimeout(resize, 350); }
+  window.addEventListener('resize', safeResize);
   // 向きを変えたら配置は作り直します（縦横比が変わるため）
-  window.addEventListener('orientationchange', () => setTimeout(() => { layout = null; resize(); }, 200));
+  window.addEventListener('orientationchange', () => setTimeout(() => { layout = null; safeResize(); }, 200));
   updateCounter();
   resize();
   loadAuto();   // 前回の続き（お手本・手書き）があれば復元
