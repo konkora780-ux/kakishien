@@ -145,7 +145,7 @@
 <body>
 
   <div class="bar">
-    <div class="group">
+    <div class="group teacher-only">
       <button id="openModel">✏ お手本を 入力</button>
       <button id="toggleGuide" class="ghost on" aria-pressed="true">おてほん 表示</button>
       <label class="field">フォント
@@ -166,7 +166,7 @@
       <button id="nextCh">つぎ ▶</button>
     </div>
 
-    <div class="group">
+    <div class="group teacher-only">
       <span class="field" style="cursor:default;">ふとさ</span>
       <div class="thick" id="thick">
         <button data-w="6"  aria-label="ほそい"><span class="dot" style="width:6px;height:6px"></span></button>
@@ -181,22 +181,28 @@
     <div class="group">
       <button id="undo">↩ ひとつ もどす</button>
       <button id="clear">この字 けす</button>
-      <button id="reset">🔄 さいしょから</button>
     </div>
 
     <div class="group">
       <button id="view" class="ghost">📄 文章を みる</button>
-      <button id="relayout" disabled>⤢ ならべ直す</button>
+      <button id="relayout" class="teacher-only" disabled>⤢ ならべ直す</button>
     </div>
 
-    <div class="group">
+    <div class="group teacher-only">
       <button id="saveImg">🖼 画像で ほぞん</button>
       <button id="copyImg">📋 画像を コピー</button>
+    </div>
+
+    <div class="group teacher-only">
       <button id="print" class="primary">🖨 いんさつ</button>
     </div>
 
-    <div class="group">
+    <div class="group teacher-only">
       <button id="store">💾 ほぞん・よみこみ</button>
+    </div>
+
+    <div class="group">
+      <button id="role" class="ghost on">🧒 せいとに わたす</button>
     </div>
   </div>
 
@@ -223,7 +229,9 @@
         <button id="doExport">⬇ ファイルに かきだし</button>
         <button id="doImport">⬆ ファイルから よみこみ</button>
       </div>
-      <div class="row" style="margin-bottom:0;justify-content:flex-end;">
+      <hr>
+      <div class="row" style="margin-bottom:0;justify-content:space-between;align-items:center;">
+        <button id="reset">🔄 さいしょから（ぜんぶ消す）</button>
         <button id="closePanel">とじる</button>
       </div>
     </div>
@@ -258,6 +266,7 @@
   let guideFont = '';
   let charIndex = 0;             // いま練習している文字の位置
   let mode = 'practice';         // 'practice'（書く） / 'sentence'（文章をみる）
+  let teacherMode = true;        // true=先生モード（全機能） / false=生徒モード（書く操作だけ）
   let layout = null;             // 文章をみるモードの各文字の配置（正規化座標 0〜1）
   let layoutMW = 0, layoutMH = 0;// マスの大きさ（正規化）
   let dragIndex = -1, drag = null; // ドラッグ中の文字
@@ -507,6 +516,7 @@
     updateCounter();
     redraw();
     scheduleAutoSave();
+    closeOverlay();
     flash('さいしょから はじめられます');
   };
 
@@ -663,6 +673,37 @@
   // 印刷：お手本は外す。今のモードのまま印刷（書く＝今の字／文章をみる＝文章全体）
   document.getElementById('print').onclick = () => window.print();
 
+  // ====== 先生モード / 生徒モードの切り替え ======
+  const roleBtn = document.getElementById('role');
+  function applyRole(){
+    document.querySelectorAll('.teacher-only').forEach(el=>{
+      el.style.display = teacherMode ? '' : 'none';
+    });
+    roleBtn.textContent = teacherMode ? '🧒 せいとに わたす' : '👩‍🏫 せんせい（長押し）';
+    roleBtn.classList.toggle('on', teacherMode);
+  }
+  let pressTimer = null, longPressed = false;
+  function cancelPress(){ if(pressTimer){ clearTimeout(pressTimer); pressTimer=null; } }
+  roleBtn.addEventListener('pointerdown', () => {
+    longPressed = false;
+    if(!teacherMode){                 // 生徒→先生は長押し（誤操作ぼうし）
+      pressTimer = setTimeout(() => {
+        longPressed = true;
+        teacherMode = true; applyRole(); scheduleAutoSave();
+        flash('せんせい モードに なりました');
+      }, 800);
+    }
+  });
+  roleBtn.addEventListener('pointerup', () => {
+    cancelPress();
+    if(teacherMode && !longPressed){  // 先生→生徒はタップ
+      teacherMode = false; applyRole(); scheduleAutoSave();
+      flash('せいと モードに なりました');
+    }
+  });
+  roleBtn.addEventListener('pointerleave', cancelPress);
+  roleBtn.addEventListener('pointercancel', cancelPress);
+
   // ====== 書いた内容の保存・よみこみ ======
   function setPenUI(w){
     penW = w;
@@ -672,7 +713,7 @@
   }
   // いまの状態をまとめる／復元する
   function getState(){
-    return { v:1, text:guideRaw, font:guideFont, penW:penW,
+    return { v:1, text:guideRaw, font:guideFont, penW:penW, teacher:teacherMode,
              strokes:strokesByChar, layout:layout, layoutMW:layoutMW, layoutMH:layoutMH };
   }
   function applyState(s){
@@ -680,6 +721,7 @@
     guideRaw = s.text || '';
     modelInput.value = guideRaw;
     guideText = filterChars(guideRaw);
+    teacherMode = (s.teacher !== undefined) ? s.teacher : true;
     if(s.font){ fontSel.value = s.font; guideFont = fontSel.value; }
     strokesByChar = Array.isArray(s.strokes) ? s.strokes : [];
     layout = s.layout || null;
@@ -691,6 +733,7 @@
     setMode('practice');
     updateCounter();
     redraw();
+    applyRole();
   }
 
   // localStorage（使えない環境ではそっと無効化）
@@ -796,7 +839,9 @@
   window.addEventListener('orientationchange', () => setTimeout(() => { layout = null; resize(); }, 200));
   updateCounter();
   resize();
-  loadAuto();   // 前回の続きがあれば復元
+  loadAuto();   // 前回の続き（お手本・手書き）があれば復元
+  teacherMode = false;   // 起動時は生徒モードで開く（先生はボタン長押しで切り替え）
+  applyRole();
 
   // 教科書体（Klee One）の読み込みが終わったら描き直す（Canvasに字形を反映するため）
   if(document.fonts && document.fonts.load){
