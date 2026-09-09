@@ -241,7 +241,7 @@
   <div class="overlay" id="modelOverlay">
     <div class="panel">
       <h2>お手本を 入力</h2>
-      <p class="note">文しょうを 入力してください。改行や スペースで 見やすく できます（練習では 文字だけ 出ます）。</p>
+      <p class="note">文しょうを 入力してください。改行や スペースで 見やすく できます（練習では 文字だけ 出ます）。<br>「これで 練習」を おすと 反映します。書いた手書きは のこります（直した字だけ 消えます）。</p>
       <textarea id="model" rows="6" placeholder="れい：あいうえお&#10;かきくけこ" autocomplete="off" spellcheck="false"></textarea>
       <div class="row" style="justify-content:space-between;margin-bottom:0;">
         <button id="modelClear">くうはくに する</button>
@@ -573,14 +573,27 @@
     redraw();
   };
 
-  // 文章入力（変えると手書きはリセット：文字の対応が変わるため）
+  // 文章入力
   function updateCounter(){
     document.getElementById('counter').textContent = guideText ? `${charIndex+1} / ${guideText.length}` : '0 / 0';
   }
-  function applyModelText(){
-    guideRaw = modelInput.value;
-    guideText = filterChars(guideRaw);   // 練習用は文字だけ
-    strokesByChar = []; charIndex = 0; cur = null;
+  // お手本を反映する。preserve=true なら、変えていない字の手書きは残す
+  // （同じ位置で文字が同じマスだけ手書きを引き継ぐ。直した字・ズレた字は消える）
+  function applyModelText(preserve){
+    const newRaw = modelInput.value;
+    const newText = filterChars(newRaw);   // 練習用は文字だけ
+    if(preserve){
+      const oldText = guideText, oldStrokes = strokesByChar;
+      const next = [];
+      for(let i=0;i<newText.length;i++){
+        next[i] = (newText[i]===oldText[i] && oldStrokes[i]) ? oldStrokes[i] : [];
+      }
+      strokesByChar = next;
+      charIndex = Math.min(charIndex, Math.max(0, newText.length-1));  // 今の位置をできるだけ保つ
+    } else {
+      strokesByChar = []; charIndex = 0;
+    }
+    guideRaw = newRaw; guideText = newText; cur = null;
     layout = null; dragIndex = -1;
     disarm();
     setMode('practice');
@@ -588,14 +601,17 @@
     redraw();
     scheduleAutoSave();
   }
-  modelInput.addEventListener('input', applyModelText);
+  // 入力中は反映しない（「これで 練習」を押したときだけ反映＝書いた手書きを守る）
 
   // お手本を広い画面で入力
   const modelOverlay = document.getElementById('modelOverlay');
-  document.getElementById('openModel').onclick = () => { modelOverlay.classList.add('show'); setTimeout(()=>modelInput.focus(), 50); };
-  document.getElementById('modelApply').onclick = () => modelOverlay.classList.remove('show');
-  modelOverlay.addEventListener('click', e => { if(e.target===modelOverlay) modelOverlay.classList.remove('show'); });
-  document.getElementById('modelClear').onclick = () => { modelInput.value=''; applyModelText(); };
+  // 開くときは、いまのお手本を枠に出す（未反映の書きかけは持ち越さない）
+  document.getElementById('openModel').onclick = () => { modelInput.value = guideRaw; modelOverlay.classList.add('show'); setTimeout(()=>modelInput.focus(), 50); };
+  // 「これで 練習」で反映（変えていない字の手書きは残す）
+  document.getElementById('modelApply').onclick = () => { applyModelText(true); modelOverlay.classList.remove('show'); };
+  // 枠の外をタップして閉じたときは、反映せず書きかけを元に戻す
+  modelOverlay.addEventListener('click', e => { if(e.target===modelOverlay){ modelInput.value = guideRaw; modelOverlay.classList.remove('show'); } });
+  document.getElementById('modelClear').onclick = () => { modelInput.value=''; applyModelText(true); };
 
   // フォント選択
   const fontSel = document.getElementById('font');
