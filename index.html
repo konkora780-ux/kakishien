@@ -189,6 +189,15 @@
       <button id="view" class="ghost">📄 文章を みる</button>
       <button id="alignH" class="teacher-only" disabled>よこ書き</button>
       <button id="alignV" class="teacher-only" disabled>たて書き</button>
+      <label class="field teacher-only" style="white-space:nowrap;">1ぎょうの もじ
+        <select id="perLine" disabled>
+          <option value="0">じどう</option>
+          <option value="nl">かいぎょうで おる</option>
+          <option value="2">2</option><option value="3">3</option><option value="4">4</option>
+          <option value="5">5</option><option value="6">6</option><option value="7">7</option>
+          <option value="8">8</option><option value="10">10</option><option value="12">12</option>
+        </select>
+      </label>
       <button id="relayout" class="teacher-only" disabled>⤢ ならべ直す</button>
     </div>
 
@@ -274,6 +283,7 @@
   let layout = null;             // 文章をみるモードの各文字の配置（正規化座標 0〜1）
   let layoutMW = 0, layoutMH = 0;// マスの大きさ（正規化）
   let layoutType = 'grid';       // 'grid'（自動） / 'horizontal'（横書き） / 'vertical'（縦書き）
+  let perLine = '0';             // 1行（たて書きは1列）の文字数。'0'=じどう / 'nl'=入力の改行で折る / '数字'
   let dragIndex = -1, drag = null; // ドラッグ中の文字
   let printing = false;          // 印刷中フラグ（枠を隠す）
 
@@ -351,6 +361,30 @@
     ctx.restore();
   }
 
+  // 文字を行（たて書きは列）に分ける。じどうのときは null
+  function splitLines(){
+    if(perLine === 'nl'){
+      // 入力の改行で折る（空の行は1行あける）
+      const lines = []; let i = 0;
+      guideRaw.replace(/\r/g,'').split('\n').forEach(t => {
+        const k = filterChars(t).length, line = [];
+        for(let j=0;j<k;j++) line.push(i++);
+        lines.push(line);
+      });
+      while(lines.length > 1 && !lines[lines.length-1].length) lines.pop();  // 末尾の空行は無視
+      return lines;
+    }
+    const k = Number(perLine);
+    if(!k) return null;
+    const lines = [];
+    for(let i=0;i<guideText.length;i+=k){
+      const line = [];
+      for(let j=i;j<Math.min(i+k, guideText.length);j++) line.push(j);
+      lines.push(line);
+    }
+    return lines;
+  }
+
   // 自動配置を計算して layout（各文字の左上座標・正規化）を作る
   function buildLayout(){
     const n = guideText.length;
@@ -359,6 +393,23 @@
     const availW = W*0.94, availH = H*0.94;
     const minCell = Math.min(availW, availH) / 8;  // マスの最小の大きさ
     let cols, rows;
+    const lines = splitLines();
+    if(lines){
+      // 文字数・改行を先生が決めたとき：その行わけで並べる（マスはいちばん長い行に合わせて正方形）
+      const long = Math.max(1, ...lines.map(l => l.length));
+      const vert = layoutType === 'vertical';
+      cols = vert ? lines.length : long;
+      rows = vert ? long : lines.length;
+      const mw = Math.min(availW/cols, availH/rows);
+      const offX = (W - mw*cols)/2, offY = (H - mw*rows)/2;
+      layoutMW = mw/W; layoutMH = mw/H;
+      lines.forEach((line, li) => line.forEach((idx, k) => {
+        const cx = vert ? cols - 1 - li : k;   // たて書きは列を右から左へ
+        const cy = vert ? k : li;
+        layout[idx] = { x:(offX+cx*mw)/W, y:(offY+cy*mw)/H };
+      }));
+      return;
+    }
     if(layoutType === 'horizontal'){
       // 横書き：なるべく少ない行数で横に並べる
       rows = 1;
@@ -651,7 +702,7 @@
       document.getElementById(id).disabled = lock;
     });
     document.querySelectorAll('#thick button').forEach(b=>b.disabled=lock);
-    ['relayout','alignH','alignV'].forEach(id => document.getElementById(id).disabled = !lock);
+    ['relayout','alignH','alignV','perLine'].forEach(id => document.getElementById(id).disabled = !lock);
     disarm();
     redraw();
   }
@@ -662,6 +713,13 @@
     if(mode !== 'sentence') return;
     buildLayout(); dragIndex = -1; redraw(); scheduleAutoSave();
   };
+  // 1行の文字数（じどう／改行で折る／数字）
+  const perLineSel = document.getElementById('perLine');
+  perLineSel.addEventListener('change', e => {
+    perLine = e.target.value;
+    if(mode !== 'sentence') return;
+    buildLayout(); dragIndex = -1; redraw(); scheduleAutoSave();
+  });
   document.getElementById('alignH').onclick = () => {
     if(mode !== 'sentence') return;
     layoutType = 'horizontal'; buildLayout(); dragIndex = -1; redraw(); scheduleAutoSave();
@@ -782,7 +840,7 @@
   }
   // いまの状態をまとめる／復元する
   function getState(){
-    return { v:1, text:guideRaw, font:guideFont, penW:penW, teacher:teacherMode, align:layoutType,
+    return { v:1, text:guideRaw, font:guideFont, penW:penW, teacher:teacherMode, align:layoutType, perLine:perLine,
              strokes:strokesByChar, layout:layout, layoutMW:layoutMW, layoutMH:layoutMH };
   }
   function applyState(s){
@@ -797,6 +855,9 @@
     layoutMW = s.layoutMW || 0;
     layoutMH = s.layoutMH || 0;
     layoutType = s.align || 'grid';
+    perLine = s.perLine || '0';
+    perLineSel.value = perLine;
+    if(perLineSel.value !== perLine){ perLine = '0'; perLineSel.value = '0'; }
     if(s.penW) setPenUI(s.penW);
     charIndex = 0; cur = null; dragIndex = -1;
     disarm();
