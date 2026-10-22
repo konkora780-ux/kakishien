@@ -199,6 +199,7 @@
         </select>
       </label>
       <button id="relayout" class="teacher-only" disabled>⤢ ならべ直す</button>
+      <button id="undoBreak" class="teacher-only" disabled>↩ かいぎょう もどす</button>
     </div>
 
     <div class="group teacher-only">
@@ -283,6 +284,7 @@
   let layout = null;             // 文章をみるモードの各文字の配置（正規化座標 0〜1）
   let layoutMW = 0, layoutMH = 0;// マスの大きさ（正規化）
   let layoutType = 'grid';       // 'grid'（自動） / 'horizontal'（横書き） / 'vertical'（縦書き）
+  let breaks = [];               // 文章をみるでタップした改行（この番号の字から次の行。入れた順）
   let perLine = '0';             // 1行（たて書きは1列）の文字数。'0'=じどう / 'nl'=入力の改行で折る / '数字'
   let dragIndex = -1, drag = null; // ドラッグ中の文字
   let printing = false;          // 印刷中フラグ（枠を隠す）
@@ -361,27 +363,35 @@
     ctx.restore();
   }
 
-  // 文字を行（たて書きは列）に分ける。じどうのときは null
-  function splitLines(){
+  // 文字を行（たて書きは列）に分ける。じどう・タップ改行なしのときは null
+  // autoK：じどうのときの1行の文字数（タップ改行だけ入れたときに使う）
+  function splitLines(autoK){
+    const n = guideText.length;
+    const cut = new Set(breaks.filter(b => b>0 && b<n));   // この字から次の行
+    if(perLine === '0' && !cut.size) return null;
+    let segs;
     if(perLine === 'nl'){
       // 入力の改行で折る（空の行は1行あける）
-      const lines = []; let i = 0;
+      segs = []; let i = 0;
       guideRaw.replace(/\r/g,'').split('\n').forEach(t => {
-        const k = filterChars(t).length, line = [];
-        for(let j=0;j<k;j++) line.push(i++);
-        lines.push(line);
+        const k = filterChars(t).length, seg = [];
+        for(let j=0;j<k;j++) seg.push(i++);
+        segs.push(seg);
       });
-      while(lines.length > 1 && !lines[lines.length-1].length) lines.pop();  // 末尾の空行は無視
-      return lines;
+      while(segs.length > 1 && !segs[segs.length-1].length) segs.pop();  // 末尾の空行は無視
+    } else {
+      segs = [Array.from({length:n}, (_, i) => i)];
     }
-    const k = Number(perLine);
-    if(!k) return null;
+    const k = perLine === 'nl' ? Infinity : (Number(perLine) || autoK);
     const lines = [];
-    for(let i=0;i<guideText.length;i+=k){
-      const line = [];
-      for(let j=i;j<Math.min(i+k, guideText.length);j++) line.push(j);
+    segs.forEach(seg => {
+      let line = [];
+      seg.forEach(idx => {
+        if(line.length && (cut.has(idx) || line.length >= k)){ lines.push(line); line = []; }
+        line.push(idx);
+      });
       lines.push(line);
-    }
+    });
     return lines;
   }
 
@@ -393,23 +403,6 @@
     const availW = W*0.94, availH = H*0.94;
     const minCell = Math.min(availW, availH) / 8;  // マスの最小の大きさ
     let cols, rows;
-    const lines = splitLines();
-    if(lines){
-      // 文字数・改行を先生が決めたとき：その行わけで並べる（マスはいちばん長い行に合わせて正方形）
-      const long = Math.max(1, ...lines.map(l => l.length));
-      const vert = layoutType === 'vertical';
-      cols = vert ? lines.length : long;
-      rows = vert ? long : lines.length;
-      const mw = Math.min(availW/cols, availH/rows);
-      const offX = (W - mw*cols)/2, offY = (H - mw*rows)/2;
-      layoutMW = mw/W; layoutMH = mw/H;
-      lines.forEach((line, li) => line.forEach((idx, k) => {
-        const cx = vert ? cols - 1 - li : k;   // たて書きは列を右から左へ
-        const cy = vert ? k : li;
-        layout[idx] = { x:(offX+cx*mw)/W, y:(offY+cy*mw)/H };
-      }));
-      return;
-    }
     if(layoutType === 'horizontal'){
       // 横書き：なるべく少ない行数で横に並べる
       rows = 1;
@@ -437,6 +430,23 @@
         if(!best || cell > best.cell) best = {c,r,cell};
       }
       cols = best.c; rows = best.r;
+    }
+    const lines = splitLines(layoutType === 'vertical' ? rows : cols);
+    if(lines){
+      // 文字数・改行を先生が決めたとき：その行わけで並べる（マスはいちばん長い行に合わせて正方形）
+      const long = Math.max(1, ...lines.map(l => l.length));
+      const vert = layoutType === 'vertical';
+      cols = vert ? lines.length : long;
+      rows = vert ? long : lines.length;
+      const mw = Math.min(availW/cols, availH/rows);
+      const offX = (W - mw*cols)/2, offY = (H - mw*rows)/2;
+      layoutMW = mw/W; layoutMH = mw/H;
+      lines.forEach((line, li) => line.forEach((idx, k) => {
+        const cx = vert ? cols - 1 - li : k;   // たて書きは列を右から左へ
+        const cy = vert ? k : li;
+        layout[idx] = { x:(offX+cx*mw)/W, y:(offY+cy*mw)/H };
+      }));
+      return;
     }
     const mw = Math.min(availW/cols, availH/rows), mh = mw;   // 正方形マス
     const offX = (W - mw*cols)/2, offY = (H - mh*rows)/2;
@@ -539,7 +549,7 @@
     for(let i=layout.length-1; i>=0; i--){   // 前面（後から描いたもの）を優先して掴む
       const L = layout[i];
       if(p.x>=L.x && p.x<=L.x+layoutMW && p.y>=L.y && p.y<=L.y+layoutMH){
-        drag = { index:i, dx:p.x-L.x, dy:p.y-L.y };
+        drag = { index:i, dx:p.x-L.x, dy:p.y-L.y, sx:p.x, sy:p.y, ox:L.x, oy:L.y };
         dragIndex = i;
         cv.setPointerCapture(e.pointerId);
         e.preventDefault();
@@ -560,7 +570,15 @@
   function dragEnd(e){
     if(!drag) return;
     e.preventDefault();
+    const d = drag;
     drag = null;
+    // ほとんど動かさずに離したら「タップ」＝そこで改行
+    const p = pos(e);
+    if(e.type === 'pointerup' && Math.hypot(p.x-d.sx, p.y-d.sy) < 0.012){
+      layout[d.index].x = d.ox; layout[d.index].y = d.oy;
+      toggleBreak(d.index);
+      return;
+    }
     redraw();
     scheduleAutoSave();
   }
@@ -606,7 +624,7 @@
       return;
     }
     resetDisarm(); disarm();
-    guideText = ''; guideRaw = ''; modelInput.value = '';
+    guideText = ''; guideRaw = ''; modelInput.value = ''; breaks = [];
     strokesByChar = []; charIndex = 0; cur = null; layout = null; dragIndex = -1;
     setMode('practice');
     updateCounter();
@@ -646,6 +664,7 @@
     } else {
       strokesByChar = []; charIndex = 0;
     }
+    if(newText !== guideText) breaks = [];   // 文字がかわったらタップ改行はリセット
     guideRaw = newRaw; guideText = newText; cur = null;
     layout = null; dragIndex = -1;
     disarm();
@@ -703,6 +722,7 @@
     });
     document.querySelectorAll('#thick button').forEach(b=>b.disabled=lock);
     ['relayout','alignH','alignV','perLine'].forEach(id => document.getElementById(id).disabled = !lock);
+    updateBreakBtn();
     disarm();
     redraw();
   }
@@ -713,6 +733,22 @@
     if(mode !== 'sentence') return;
     buildLayout(); dragIndex = -1; redraw(); scheduleAutoSave();
   };
+  // タップした改行を1つもどす（さいごに入れたものから）
+  const undoBreakBtn = document.getElementById('undoBreak');
+  function updateBreakBtn(){ undoBreakBtn.disabled = !(mode === 'sentence' && breaks.length); }
+  undoBreakBtn.onclick = () => {
+    if(mode !== 'sentence' || !breaks.length) return;
+    breaks.pop(); buildLayout(); dragIndex = -1; updateBreakBtn(); redraw(); scheduleAutoSave();
+  };
+  // 文字をタップ：その字から次の行にする（もう一度タップで取り消し）。先生モードだけ
+  function toggleBreak(i){
+    if(!teacherMode || i <= 0) return;
+    const at = breaks.indexOf(i);
+    if(at >= 0){ breaks.splice(at, 1); flash('かいぎょうを とりけしました'); }
+    else { breaks.push(i); flash('ここから つぎの ぎょうに しました'); }
+    buildLayout(); dragIndex = -1; updateBreakBtn(); redraw(); scheduleAutoSave();
+  }
+
   // 1行の文字数（じどう／改行で折る／数字）
   const perLineSel = document.getElementById('perLine');
   perLineSel.addEventListener('change', e => {
@@ -840,7 +876,7 @@
   }
   // いまの状態をまとめる／復元する
   function getState(){
-    return { v:1, text:guideRaw, font:guideFont, penW:penW, teacher:teacherMode, align:layoutType, perLine:perLine,
+    return { v:1, text:guideRaw, font:guideFont, penW:penW, teacher:teacherMode, align:layoutType, perLine:perLine, breaks:breaks,
              strokes:strokesByChar, layout:layout, layoutMW:layoutMW, layoutMH:layoutMH };
   }
   function applyState(s){
@@ -856,6 +892,7 @@
     layoutMH = s.layoutMH || 0;
     layoutType = s.align || 'grid';
     perLine = s.perLine || '0';
+    breaks = Array.isArray(s.breaks) ? s.breaks : [];
     perLineSel.value = perLine;
     if(perLineSel.value !== perLine){ perLine = '0'; perLineSel.value = '0'; }
     if(s.penW) setPenUI(s.penW);
